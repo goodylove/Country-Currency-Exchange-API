@@ -8,6 +8,7 @@ import ErrorHandlerMiddleware from "./middleware/errorHandler.js";
 import { NotFoundHandler } from "./middleware/not-found.js";
 import router from "./routes/data.routes.js";
 import Router from "./routes/data.routes.js";
+import statusRouter from "./routes/status.routes.js";
 
 const app = express();
 
@@ -21,21 +22,8 @@ app.get("/", (req, res) => {
   );
 });
 
-app.get("/test-db", async (req, res) => {
-  try {
-    const [columns] = await connection.query("SELECT *  FROM  Country");
-    res.json({
-      message: "Database connected successfully!",
-      data: columns,
-    });
-  } catch (err) {
-    console.error("DB connection failed:", err.message);
-    res.status(500).json({ error: "Database connection failed" });
-  }
-});
-
+app.use("/status", statusRouter);
 app.use("/countries", Router);
-
 
 app.use(NotFoundHandler);
 app.use(ErrorHandlerMiddleware);

@@ -1,5 +1,6 @@
 import connection from "../db/db.js";
 import { fetchCountries, fetchCountriesCurrencyRate } from "../lib/external.js";
+import { generateSummaryImage } from "../lib/imageGenerator.js";
 
 async function refreshCountryData() {
   let countries = await fetchCountries();
@@ -95,6 +96,7 @@ async function refreshCountryData() {
     console.error("Failed to update global status:", error.message);
     throw new Error("Failed to update refresh status");
   }
+    await generateSummaryImage();
 
   return {
     message: "Data refreshed successfully",
