@@ -1,277 +1,225 @@
-Country Currency & Exchange API
-This is a RESTful API built with Node.js, Express, and MySQL. It fetches country data from the RestCountries API and currency exchange rates from the Open Exchange Rate API, calculates an estimated GDP, and caches all data in a local MySQL database.
-
-The API provides endpoints to retrieve all countries, filter them, get a single country, and view the cache status. It also dynamically generates a summary image of the cached data.
-
-Features
-Data Caching: Fetches and stores data in a MySQL database to act as a fast, local cache.
-
-Data Processing: Computes an estimated_gdp for each country based on population and exchange rate.
-
-Dynamic Filtering: Supports filtering countries by region and currency_code.
-
-Sorting: Allows sorting the country list by estimated_gdp.
-
-Image Generation: Dynamically creates and serves a .png image summarizing the database content.
-
-Robust Error Handling: Gracefully handles external API failures and invalid requests.
-
-Prerequisites
-Before you begin, ensure you have the following installed on your local machine:
-
-Node.js (v18.x or later)
 
 
+#  Country Currency & Exchange API
 
-Installation & Setup
-Clone the repository:
+A simple RESTful API that fetches country data from an external source, matches each country’s currency with its exchange rate, computes an estimated GDP, and stores everything in a MySQL database.
+This project is designed to help you practice API integration, database caching, and CRUD operations.
 
-Bash
+---
 
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
-Install dependencies:
+##  Features
 
-Bash
+* Fetches countries from [REST Countries API](https://restcountries.com/v2/all?fields=name,capital,region,population,flag,currencies)
+* Fetches exchange rates from [Exchange Rate API](https://open.er-api.com/v6/latest/USD)
+* Matches each country’s currency with its rate
+* Computes `estimated_gdp = population × random(1000–2000) ÷ exchange_rate`
+* Stores or updates country data in MySQL
+* Generates a summary image showing total countries, top 5 by GDP, and last refresh timestamp
+* Provides CRUD endpoints and caching behavior
 
+---
+
+##  API Endpoints
+
+|   Method   | Endpoint             | Description                                                                                         |
+| :--------: | :------------------- | :-------------------------------------------------------------------------------------------------- |
+|  **POST**  | `/countries/refresh` | Fetch all countries and exchange rates, then cache in the DB                                        |
+|   **GET**  | `/countries`         | Get all countries (supports filters & sorting: `?region=Africa`, `?currency=NGN`, `?sort=gdp_desc`) |
+|   **GET**  | `/countries/:name`   | Get one country by name                                                                             |
+| **DELETE** | `/countries/:name`   | Delete a country record                                                                             |
+|   **GET**  | `/status`            | Show total countries and last refresh timestamp                                                     |
+|   **GET**  | `/countries/image`   | Serve generated summary image                                                                       |
+
+---
+
+##  Database Schema
+
+### **Country**
+
+| Column              | Type                               | Description               |
+| ------------------- | ---------------------------------- | ------------------------- |
+| `id`                | INT (PK, auto-increment)           | Unique ID                 |
+| `name`              | VARCHAR(100), **unique**, not null | Country name              |
+| `capital`           | VARCHAR(100)                       | Country capital           |
+| `region`            | VARCHAR(100)                       | Region name               |
+| `population`        | BIGINT, not null                   | Population                |
+| `currency_code`     | VARCHAR(10)                        | Currency code             |
+| `exchange_rate`     | DECIMAL(20,6)                      | Exchange rate against USD |
+| `estimated_gdp`     | DECIMAL(20,2)                      | Computed GDP estimate     |
+| `flag_url`          | VARCHAR(255)                       | URL of the country’s flag |
+| `last_refreshed_at` | TIMESTAMP                          | Auto updated on refresh   |
+
+### **Status**
+
+| Column              | Type                     | Description                      |
+| ------------------- | ------------------------ | -------------------------------- |
+| `id`                | INT (PK, auto-increment) | Always 1                         |
+| `total_countries`   | BIGINT                   | Total number of cached countries |
+| `last_refreshed_at` | TIMESTAMP                | Last refresh time                |
+
+---
+
+## Installation & Setup
+
+###  Prerequisites
+
+Make sure you have installed:
+
+* Node.js ≥ 18
+* MySQL ≥ 8
+* npm or yarn
+
+---
+
+###  Clone the Repository
+
+```bash
+git clone https://github.com/your-username/country-currency-api.git
+cd country-currency-api
+```
+
+---
+
+###  Install Dependencies
+
+```bash
 npm install
-Set up the Database:
+```
 
-Log in to your MySQL server (e.g., mysql -u root -p).
+---
 
-Create the database:
+###  Setup Environment Variables
 
-SQL
+Create a `.env` file in your root directory:
 
-CREATE DATABASE countries_api_db;
-Use the database:
-
-SQL
-
-USE countries_api_db;
-Run the following SQL script to create the necessary tables:
-
-SQL
-
--- Create the 'countries' table
-CREATE TABLE countries (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    capital VARCHAR(255) NULL,
-    region VARCHAR(255) NULL,
-    population BIGINT NOT NULL,
-    currency_code VARCHAR(10) NULL,
-    exchange_rate DECIMAL(20, 6) NULL,
-    estimated_gdp DECIMAL(30, 6) NULL,
-    flag_url VARCHAR(512) NULL,
-    last_refreshed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- Create the 'Status' table
-CREATE TABLE Status (
-    id INT PRIMARY KEY DEFAULT 1,
-    last_refreshed_at TIMESTAMP NULL
-);
-
--- Insert the single row we will always use for status
-INSERT IGNORE INTO Status (id, global_last_refreshed_at) VALUES (1, NULL);
-Configure Environment Variables:
-
-Create a .env file in the root of the project:
-
-Bash
-
-touch .env
-Add the following configuration, replacing the values with your MySQL credentials:
-
-Ini, TOML
-
-# .env file
-PORT=3000
-
+```env
+PORT=5000
 DB_HOST=localhost
-DB_USER=your_mysql_username
-DB_PASS=your_mysql_password
-DB_NAME=countries_api_db
-Running the Application
-Start the server:
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_NAME=country_db
+```
 
-Bash
+---
 
+###  Create the Database and Tables
+
+Login to MySQL:
+
+```bash
+mysql -u root -p
+```
+
+Then:
+
+```sql
+CREATE DATABASE country_db;
+USE country_db;
+
+CREATE TABLE Country (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) UNIQUE NOT NULL,
+  capital VARCHAR(100),
+  region VARCHAR(100),
+  population BIGINT NOT NULL,
+  currency_code VARCHAR(10),
+  exchange_rate DECIMAL(20,6),
+  estimated_gdp DECIMAL(20,2),
+  flag_url VARCHAR(255),
+  last_refreshed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Status (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  total_countries BIGINT,
+  last_refreshed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT INTO Status (total_countries) VALUES (0);
+```
+
+---
+
+###  Run the App
+
+```bash
 npm start
-The server will be running on http://localhost:3000 (or the port you specified in .env).
+```
 
-!! IMPORTANT: Initial Data Refresh !! When you first start the server, the database is empty. You must run the initial data refresh to populate the database.
+Your API will start at `http://localhost:3000`.
 
-Use Postman or curl to send a POST request:
+---
 
-Bash
+##  Testing the Endpoints
 
-curl -X POST http://localhost:3000/countries/refresh
-This process will take 10-20 seconds. Once complete, all other GET endpoints will work.
+### Refresh and Populate Database
 
-API Endpoints
-1. Refresh Data Cache
-Refetches all data from the external APIs, recalculates GDP, and updates the MySQL database. This also generates the summary.png image.
+```
+POST /countries/refresh
+```
 
-Method: POST
+### Get All Countries
 
-URL: /countries/refresh
+```
+GET /countries
+```
 
-Success Response (200 OK):
+### Get Countries by Region or Currency
 
-JSON
+```
+GET /countries?region=Africa
+GET /countries?currency=NGN
+```
 
-{
-  "message": "Data refreshed successfully",
-  "countries_processed": 250
-}
-Error Response (503 Service Unavailable): (If external APIs fail)
+### Get One Country
 
-JSON
+```
+GET /countries/Nigeria
+```
 
-{
-  "error": "External data source unavailable",
-  "details": "Could not fetch data from RestCountries API"
-}
-2. Get All Countries
-Retrieves a list of all countries from the database. Supports filtering and sorting.
+### Delete a Country
 
-Method: GET
+```
+DELETE /countries/Nigeria
+```
 
-URL: /countries
+### Check Refresh Status
 
-Query Parameters (Optional):
+```
+GET /status
+```
 
-region (e.g., ?region=Africa): Filters by region.
+### Get Summary Image
 
-currency (e.g., ?currency=NGN): Filters by currency code.
+```
+GET /countries/image
+```
 
-sort (e.g., ?sort=gdp_desc): Sorts by estimated GDP.
+---
 
-Example Request: GET /countries?region=Africa&sort=gdp_desc
+##  Error Responses
 
-Success Response (200 OK):
+| Status Code | Example Response                                  |
+| ----------- | ------------------------------------------------- |
+| **400**     | `{ "error": "Validation failed" }`                |
+| **404**     | `{ "error": "Country not found" }`                |
+| **500**     | `{ "error": "Internal server error" }`            |
+| **503**     | `{ "error": "External data source unavailable" }` |
 
-JSON
+---
 
-[
-  {
-    "id": 1,
-    "name": "Nigeria",
-    "capital": "Abuja",
-    "region": "Africa",
-    "population": 206139589,
-    "currency_code": "NGN",
-    "exchange_rate": 1600.23,
-    "estimated_gdp": 25767448125.2,
-    "flag_url": "https://flagcdn.com/ng.svg",
-    "last_refreshed_at": "2025-10-27T18:00:00Z"
-  },
-  {
-    "id": 2,
-    "name": "Ghana",
-    "capital": "Accra",
-    "region": "Africa",
-    "population": 31072940,
-    "currency_code": "GHS",
-    "exchange_rate": 15.34,
-    "estimated_gdp": 3029834520.6,
-    "flag_url": "https://flagcdn.com/gh.svg",
-    "last_refreshed_at": "2025-10-27T18:00:00Z"
-  }
-]
-3. Get a Single Country
-Retrieves a single country record by its name.
+##  Notes
 
-Method: GET
+* If a country has multiple currencies, only the first is used.
+* If no currency or rate is available, GDP = 0 or null but the record is still stored.
+* `/countries/refresh` updates existing countries and recalculates new GDP values each time.
+* Summary image (`cache/summary.png`) is auto-regenerated on every refresh.
 
-URL: /countries/:name (e.g., /countries/Nigeria)
 
-Success Response (200 OK):
 
-JSON
+---
+##  License
 
-{
-  "id": 1,
-  "name": "Nigeria",
-  "capital": "Abuja",
-  "region": "Africa",
-  "population": 206139589,
-  "currency_code": "NGN",
-  "exchange_rate": 1600.23,
-  "estimated_gdp": 25767448125.2,
-  "flag_url": "https://flagcdn.com/ng.svg",
-  "last_refreshed_at": "2025-10-27T18:00:00Z"
-}
-Error Response (404 Not Found):
+MIT License — free to use and modify.
 
-JSON
 
-{
-  "error": "Country not found"
-}
-4. Delete a Country
-Deletes a country record from the database by its name.
-
-Method: DELETE
-
-URL: /countries/:name (e.g., /countries/Nigeria)
-
-Success Response (200 OK):
-
-JSON
-
-{
-  "message": "Country deleted successfully"
-}
-Error Response (404 Not Found):
-
-JSON
-
-{
-  "error": "Country not found"
-}
-5. Get API Status
-Retrieves the total number of countries in the database and the timestamp of the last successful refresh.
-
-Method: GET
-
-URL: /status
-
-Success Response (200 OK):
-
-JSON
-
-{
-  "total_countries": 250,
-  "last_refreshed_at": "2025-10-27T18:00:00Z"
-}
-6. Get Summary Image
-Serves the generated summary.png image, which is created/updated every time the refresh endpoint is called.
-
-Method: GET
-
-URL: /countries/image
-
-Success Response (200 OK):
-
-Returns the image file (MIME type image/png).
-
-Error Response (404 Not Found): (If the POST /countries/refresh endpoint has not been run yet)
-
-JSON
-
-{
-  "error": "Summary image not found"
-}
-Tech Stack
-Backend: Node.js, Express
-
-Database: MySQL (with mysql2)
-
-HTTP Client: Axios
-
-Image Generation: Jimp
-
-Environment Variables: dotenv
